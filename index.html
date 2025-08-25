@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloco de Notas Pro</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React, ReactDOM e Marked CDNs -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.client.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Babel para transpilar JSX no navegador (necessário para rodar sem build tool) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Prevents horizontal scrolling */
+        }
+        /* Custom scrollbar for WebKit browsers */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a202c; /* even darker */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2d3748; /* bg-gray-800 */
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5568; /* bg-gray-600 */
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out;
+        }
+
+        /* Markdown styles */
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            color: #E2E8F0; /* text-gray-200 */
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            font-weight: bold;
+        }
+        .markdown-content h1 { font-size: 2em; border-bottom: 1px solid #4A5568; padding-bottom: 0.3em; }
+        .markdown-content h2 { font-size: 1.75em; }
+        .markdown-content h3 { font-size: 1.5em; }
+        .markdown-content p {
+            margin-bottom: 1em;
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin-left: 1.5em;
+            margin-bottom: 1em;
+        }
+        .markdown-content ul li {
+            list-style-type: disc;
+        }
+        .markdown-content ol li {
+            list-style-type: decimal;
+        }
+        .markdown-content strong {
+            font-weight: bold;
+        }
+        .markdown-content em {
+            font-style: italic;
+        }
+        .markdown-content a {
+            color: var(--accent-color); /* Using CSS variable for accent color */
+            text-decoration: underline;
+        }
+        .markdown-content code {
+            background-color: #4A5568; /* gray-600 */
+            border-radius: 0.25rem;
+            padding: 0.1em 0.4em;
+            font-family: 'monospace';
+            font-size: 0.9em;
+        }
+        .markdown-content pre {
+            background-color: #2D3748; /* gray-800 */
+            border-radius: 0.5rem;
+            padding: 1em;
+            overflow-x: auto;
+        }
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+        }
+
+        /* Styles for opacity slider thumb (browser compatibility) */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* Example shadow */
+            margin-top: -6px; /* Adjust to center thumb */
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+
+        input[type="range"]::-ms-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Default URLs
+        // If you are running locally, make sure 'o03kz2571hh81.jpg' is in the same directory as your HTML file.
+        const DEFAULT_BACKGROUND_URL = './o03kz2571hh81.jpg'; // Changed to relative path
+        const DEFAULT_ACCENT_COLOR = '#3B82F6'; // blue-500
+
+        // Component for the Settings Modal
+        const SettingsModal = ({ onClose, onImageUpload, onResetBackground, fileInputRef, backgroundOpacity, onOpacityChange }) => {
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fade-in">
+              <div className="bg-gray-900 text-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-gray-700">
+                <h2 className="text-3xl font-bold mb-6 text-white text-center">Configurações de Fundo</h2>
+
+                <div className="mb-6 pb-4 border-b border-gray-700">
+                  <label className="block text-gray-300 text-lg font-semibold mb-2">
+                    Imagem de Fundo:
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={onImageUpload}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col sm:flex-row gap-2 mt-4 justify-end">
+                    <button
+                      onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                      className="flex-1 sm:flex-none px-4 py-3 bg-blue-800 hover:bg-blue-900 transition-all duration-300 rounded-lg shadow-md text-white font-semibold text-base
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-opacity-75"
+                    >
+                      Escolher Imagem
+                    </button>
+                    <button
+                      onClick={onResetBackground}
+                      className="flex-1 sm:flex-none px-4 py-3 bg-gray-700 hover:bg-gray-800 transition-all duration-300 rounded-lg shadow-md text-white font-semibold text-base
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                    >
+                      Redefinir Fundo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-gray-300 text-lg font-semibold mb-2" htmlFor="opacity-slider">
+                    Opacidade da Imagem de Fundo: {Math.round(backgroundOpacity * 100)}%
+                  </label>
+                  <input
+                    id="opacity-slider"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={backgroundOpacity}
+                    onChange={(e) => onOpacityChange(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    style={{
+                      '--tw-range-thumb-bg': 'var(--accent-color)',
+                      '--tw-range-thumb-box-shadow': '0 0 0 3px rgba(59, 130, 246, 0.5)'
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-end mt-6">
+                  <button
+                    onClick={onClose}
+                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 transition-all duration-300 rounded-lg shadow-md text-white font-semibold text-base
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Componente para o Modal de Mensagem (substitui alert())
+        const MessageBox = ({ message, onClose }) => (
+            <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+                <div className="bg-gray-900 text-white p-7 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 transform scale-100 animate-fade-in">
+                    <p className="text-xl font-semibold mb-5 text-center">{message}</p>
+                    <div className="flex justify-center mt-6">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-3 rounded-lg bg-gray-700 hover:bg-gray-800 transition-all duration-300 text-white font-bold shadow-lg
+                                       transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // Componente principal do aplicativo Bloco de Notas
+        const App = () => {
+          const [notes, setNotes] = React.useState([]);
+          const [currentNoteText, setCurrentNoteText] = React.useState('');
+          const [currentNoteTags, setCurrentNoteTags] = React.useState('');
+          const [editingNoteId, setEditingNoteId] = React.useState(null);
+          const [searchTerm, setSearchTerm] = React.useState('');
+          const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
+          const [noteToDeleteId, setNoteToDeleteId] = React.useState(null);
+          const [wordCount, setWordCount] = React.useState(0);
+          const [charCount, setCharCount] = React.useState(0);
+          const [isPreviewMode, setIsPreviewMode] = React.useState(false);
+
+          const [backgroundUrl, setBackgroundUrl] = React.useState('');
+          const [backgroundOpacity, setBackgroundOpacity] = React.useState(0.6);
+          const accentColor = DEFAULT_ACCENT_COLOR;
+
+          const fileInputRef = React.useRef(null);
+          const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+
+          // Estados para as mensagens de erro/informação
+          const [showMessageBox, setShowMessageBox] = React.useState(false);
+          const [messageBoxContent, setMessageBoxContent] = React.useState('');
+
+          React.useEffect(() => {
+            try {
+              const storedNotes = JSON.parse(localStorage.getItem('notes') || '[]');
+              setNotes(storedNotes);
+
+              const storedBackgroundUrl = localStorage.getItem('backgroundUrl');
+              setBackgroundUrl(storedBackgroundUrl || DEFAULT_BACKGROUND_URL);
+
+              const storedBackgroundOpacity = parseFloat(localStorage.getItem('backgroundOpacity'));
+              if (!isNaN(storedBackgroundOpacity)) {
+                setBackgroundOpacity(storedBackgroundOpacity);
+              } else {
+                setBackgroundOpacity(0.6);
+              }
+
+            } catch (error) {
+              console.error("Erro ao carregar dados do Local Storage:", error);
+              setNotes([]);
+              setBackgroundUrl(DEFAULT_BACKGROUND_URL);
+              setBackgroundOpacity(0.6);
+            }
+          }, []);
+
+          React.useEffect(() => {
+            try {
+              localStorage.setItem('notes', JSON.stringify(notes));
+              localStorage.setItem('backgroundUrl', backgroundUrl);
+              localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
+            } catch (error) {
+              console.error("Erro ao salvar dados no Local Storage:", error);
+            }
+          }, [notes, backgroundUrl, backgroundOpacity]);
+
+          React.useEffect(() => {
+            const text = currentNoteText.trim();
+            setCharCount(text.length);
+            setWordCount(text ? text.split(/\s+/).filter(word => word.length > 0).length : 0);
+          }, [currentNoteText]);
+
+          const handleSaveNote = () => {
+            if (!currentNoteText.trim()) {
+              setMessageBoxContent("A nota não pode estar vazia!");
+              setShowMessageBox(true);
+              return;
+            }
+
+            const now = new Date().toISOString();
+            const tagsArray = currentNoteTags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+
+            if (editingNoteId) {
+              setNotes(notes.map(note =>
+                note.id === editingNoteId
+                  ? { ...note, text: currentNoteText.trim(), tags: tagsArray, lastModified: now }
+                  : note
+              ));
+              setEditingNoteId(null);
+            } else {
+              const newNote = {
+                id: Date.now(),
+                text: currentNoteText.trim(),
+                tags: tagsArray,
+                createdAt: now,
+                lastModified: now,
+              };
+              setNotes([...notes, newNote]); // Adiciona a nova nota no final (última)
+            }
+            setCurrentNoteText('');
+            setCurrentNoteTags('');
+            setIsPreviewMode(false);
+          };
+
+          const handleEditNote = (note) => {
+            setCurrentNoteText(note.text);
+            setCurrentNoteTags(note.tags ? note.tags.join(', ') : '');
+            setEditingNoteId(note.id);
+            setIsPreviewMode(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          };
+
+          const confirmDelete = (id) => {
+            setNoteToDeleteId(id);
+            setShowConfirmDialog(true);
+          };
+
+          const handleDeleteNote = () => {
+            setNotes(notes.filter(note => note.id !== noteToDeleteId));
+            setShowConfirmDialog(false);
+            setNoteToDeleteId(null);
+          };
+
+          const cancelDelete = () => {
+            setShowConfirmDialog(false);
+            setNoteToDeleteId(null);
+          };
+
+          const handleClearAllNotes = () => {
+            setNoteToDeleteId('all');
+            setShowConfirmDialog(true);
+          };
+
+          const handleConfirmClearAllNotes = () => {
+            setNotes([]);
+            setCurrentNoteText('');
+            setCurrentNoteTags('');
+            setEditingNoteId(null);
+            setShowConfirmDialog(false);
+            setNoteToDeleteId(null);
+          };
+
+          const handleImageUpload = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+              const fileUrl = URL.createObjectURL(file);
+              setBackgroundUrl(fileUrl);
+            } else {
+              setMessageBoxContent("Nenhuma imagem selecionada.");
+              setShowMessageBox(true);
+            }
+          };
+
+          const handleResetBackground = () => {
+            setBackgroundUrl(DEFAULT_BACKGROUND_URL);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+            setBackgroundOpacity(0.6);
+          };
+
+          const filteredAndSortedNotes = React.useMemo(() => {
+            const filtered = notes.filter(note => {
+              const textMatch = note.text.toLowerCase().includes(searchTerm.toLowerCase());
+              const tagsMatch = note.tags && note.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+              return textMatch || tagsMatch;
+            });
+            // Sort by createdAt in ascending order (oldest first)
+            return [...filtered].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          }, [notes, searchTerm]);
+
+          const ConfirmDialog = ({ message, onConfirm, onCancel }) => (
+            <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+              <div className="bg-gray-900 text-white p-7 rounded-xl shadow-2xl max-w-sm w-full border border-gray-700 transform scale-100 animate-fade-in">
+                <p className="text-xl font-semibold mb-5 text-center">{message}</p>
+                <div className="flex justify-around space-x-4 mt-6">
+                  <button
+                    onClick={onCancel}
+                    className="flex-1 px-6 py-3 rounded-lg bg-gray-700 hover:bg-gray-800 transition-all duration-300 text-white font-bold shadow-lg
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={onConfirm}
+                    className="flex-1 px-6 py-3 rounded-lg bg-red-700 hover:bg-red-800 transition-all duration-300 text-white font-bold shadow-lg
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-opacity-75"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+
+          return (
+            <div className="min-h-screen p-4 flex flex-col items-center relative bg-black text-gray-100 font-inter"
+                 style={{ '--accent-color': accentColor }}>
+              <div
+                className="absolute inset-0 w-full h-full bg-cover bg-center bg-fixed"
+                style={{
+                  backgroundImage: `url(${backgroundUrl})`,
+                  opacity: backgroundOpacity,
+                  filter: `none`
+                }}
+              ></div>
+              <div className="absolute inset-0 w-full h-full bg-black opacity-60"></div>
+
+              <div className="relative z-10 w-full flex flex-col items-center">
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  className="absolute top-4 right-4 p-3 bg-gray-800 bg-opacity-70 rounded-full shadow-lg text-white hover:bg-gray-700 transition-colors duration-200 z-20
+                               transform hover:scale-110 active:scale-90 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-opacity-75"
+                  aria-label="Configurações de Fundo"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21.573 2.946a2.222 2.222 0 00-3.141 0L3.5 17.878A2.222 2.222 0 003.5 21.02a2.222 2.222 0 003.141 0l14.932-14.932a2.222 2.222 0 000-3.142zM15 8.086L8.914 14.172l-1.06-1.06 6.086-6.086zM4.946 19.57a.707.707 0 010-1l1.06-1.06 2.121 2.121-1.06 1.06a.707.707 0 01-1 0L4.946 19.57z"/>
+                  </svg>
+                </button>
+
+                <h1 className="text-5xl md:text-6xl font-extrabold mb-10 text-white text-center drop-shadow-xl tracking-wide">
+                  Bloco de Notas <span style={{ color: 'var(--accent-color)' }}>Pro</span>
+                </h1>
+
+                <div className="w-full max-w-xl bg-gray-900 bg-opacity-70 p-6 rounded-2xl shadow-2xl mb-10 border border-gray-800 transform hover:scale-[1.005] transition-transform duration-200">
+                  <div className="flex justify-end mb-4">
+                    <button
+                      onClick={() => setIsPreviewMode(false)}
+                      style={{ backgroundColor: !isPreviewMode ? 'var(--accent-color)' : '' }}
+                      className={`px-4 py-2 rounded-l-lg font-semibold text-sm ${!isPreviewMode ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    >
+                      Escrever
+                    </button>
+                    <button
+                      onClick={() => setIsPreviewMode(true)}
+                      style={{ backgroundColor: isPreviewMode ? 'var(--accent-color)' : '' }}
+                      className={`px-4 py-2 rounded-r-lg font-semibold text-sm ${isPreviewMode ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                    >
+                      Visualizar
+                    </button>
+                  </div>
+
+                  {!isPreviewMode ? (
+                    <>
+                      <textarea
+                        className="w-full p-5 bg-gray-800 bg-opacity-70 text-gray-100 rounded-xl border border-gray-700 focus:ring-3"
+                        style={{ borderColor: 'var(--accent-color)', '--tw-ring-color': 'var(--accent-color)' }}
+                        placeholder="Escreva sua nota aqui (com suporte a Markdown!)..."
+                        value={currentNoteText}
+                        onChange={(e) => setCurrentNoteText(e.target.value)}
+                      ></textarea>
+                      <input
+                        type="text"
+                        className="w-full p-4 bg-gray-800 bg-opacity-70 text-gray-100 rounded-xl border border-gray-700 focus:ring-3"
+                        style={{ borderColor: 'var(--accent-color)', '--tw-ring-color': 'var(--accent-color)' }}
+                        placeholder="Adicione tags (ex: trabalho, ideias, pessoal)..."
+                        value={currentNoteTags}
+                        onChange={(e) => setCurrentNoteTags(e.target.value)}
+                      />
+                    </>
+                  ) : (
+                    <div
+                      className="w-full p-5 bg-gray-800 bg-opacity-70 text-gray-100 rounded-xl border border-gray-700 min-h-[150px] overflow-auto markdown-content"
+                      dangerouslySetInnerHTML={{ __html: marked.parse(currentNoteText || 'Nenhuma pré-visualização para exibir.') }}
+                    ></div>
+                  )}
+
+                  <div className="text-right text-gray-400 text-sm mt-2 mb-4">
+                    {wordCount} palavras, {charCount} caracteres
+                  </div>
+                  <div className="flex flex-col sm:flex-row justify-end gap-4">
+                    <button
+                      onClick={handleSaveNote}
+                      style={{ backgroundColor: 'var(--accent-color)' }}
+                      className="flex-1 sm:flex-none px-8 py-4 hover:brightness-125 transition-all duration-300 rounded-xl shadow-lg text-white font-bold text-xl
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-opacity-75"
+                    >
+                      {editingNoteId ? 'Atualizar Nota' : 'Adicionar Nota'}
+                    </button>
+                    {editingNoteId && (
+                      <button
+                        onClick={() => {
+                          setCurrentNoteText('');
+                          setCurrentNoteTags('');
+                          setEditingNoteId(null);
+                          setIsPreviewMode(false);
+                        }}
+                        className="flex-1 sm:flex-none px-8 py-4 bg-gray-700 hover:bg-gray-800 transition-all duration-300 rounded-xl shadow-lg text-white font-bold text-xl
+                                       transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                      >
+                        Cancelar Edição
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="w-full max-w-xl flex flex-col sm:flex-row justify-between items-center gap-5 mb-10">
+                  <input
+                    type="text"
+                    className="flex-grow w-full sm:w-auto p-4 bg-gray-800 bg-opacity-70 text-gray-100 rounded-xl border border-gray-700 focus:ring-3"
+                    style={{ borderColor: 'var(--accent-color)', '--tw-ring-color': 'var(--accent-color)' }}
+                    placeholder="Buscar notas por texto ou tags..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <button
+                    onClick={handleClearAllNotes}
+                    className="px-8 py-4 bg-red-700 hover:bg-red-800 transition-all duration-300 rounded-xl shadow-lg text-white font-bold text-xl
+                               transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-opacity-75 w-full sm:w-auto"
+                  >
+                    Limpar Todas
+                  </button>
+                </div>
+
+                <div className="w-full max-w-xl grid grid-cols-1 md:grid-cols-2 gap-7 pb-20">
+                  {filteredAndSortedNotes.length === 0 ? (
+                    <p className="text-center text-gray-400 text-2xl py-12 col-span-full">
+                      {searchTerm ? "Nenhuma nota encontrada com este termo." : "Você ainda não tem notas. Adicione uma!"}
+                    </p>
+                  ) : (
+                    filteredAndSortedNotes.map(note => (
+                      <div
+                        key={note.id}
+                        className="bg-gray-900 bg-opacity-70 p-6 rounded-2xl shadow-xl border border-gray-800
+                                       flex flex-col justify-between hover:scale-[1.03] transition-transform duration-200 animate-fade-in
+                                       h-64"
+                      >
+                        <div
+                          className="text-gray-200 text-xl mb-5 whitespace-pre-wrap leading-relaxed markdown-content flex-grow overflow-y-auto"
+                          dangerouslySetInnerHTML={{ __html: marked.parse(note.text) }}
+                        ></div>
+
+                        {note.tags && note.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {note.tags.map((tag, index) => (
+                              <span key={index}
+                                    style={{ backgroundColor: 'var(--accent-color)' }}
+                                    className="px-3 py-1 text-blue-100 text-xs font-semibold rounded-full shadow-md">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm text-gray-500 mb-5 border-t border-gray-700 pt-4">
+                          <span className="mb-2 sm:mb-0">Criado: {new Date(note.createdAt).toLocaleString('pt-BR')}</span>
+                          {note.createdAt !== note.lastModified && (
+                            <span className="ml-0 sm:ml-4">Modificado: {new Date(note.lastModified).toLocaleString('pt-BR')}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-end gap-4">
+                          <button
+                            onClick={() => handleEditNote(note)}
+                            className="flex-1 sm:flex-none px-7 py-3 bg-yellow-600 hover:bg-yellow-700 transition-all duration-300 rounded-xl shadow-lg text-white font-bold text-lg
+                                         transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-75"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => confirmDelete(note.id)}
+                            className="flex-1 sm:flex-none px-7 py-3 bg-red-600 hover:bg-red-700 transition-all duration-300 rounded-xl shadow-lg text-white font-bold text-lg
+                                         transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {showConfirmDialog && (
+                <ConfirmDialog
+                  message={noteToDeleteId === 'all' ? "Tem certeza que deseja apagar TODAS as notas? Esta ação não pode ser desfeita." : "Tem certeza que deseja excluir esta nota?"}
+                  onConfirm={noteToDeleteId === 'all' ? handleConfirmClearAllNotes : handleDeleteNote}
+                  onCancel={cancelDelete}
+                />
+              )}
+
+              {showSettingsModal && (
+                <SettingsModal
+                  onClose={() => setShowSettingsModal(false)}
+                  onImageUpload={handleImageUpload}
+                  onResetBackground={handleResetBackground}
+                  fileInputRef={fileInputRef}
+                  backgroundOpacity={backgroundOpacity}
+                  onOpacityChange={setBackgroundOpacity}
+                />
+              )}
+
+              {showMessageBox && (
+                  <MessageBox
+                      message={messageBoxContent}
+                      onClose={() => setShowMessageBox(false)}
+                  />
+              )}
+            </div>
+          );
+        };
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container); // MUDANÇA: alterado para ReactDOM.createRoot
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
